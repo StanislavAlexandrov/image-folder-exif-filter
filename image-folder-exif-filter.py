@@ -12,12 +12,13 @@ class ImageViewerApp:
         self.root.geometry("800x600")
 
         self.folder_path = ""
-        self.last_folder = os.path.expanduser("~")  # Start with user's home directory
+        self.last_folder = os.path.expanduser("~")
         self.images = []
         self.is_filtered = True
         self.filter_tag = "DateTimeOriginal"
         self.image_queue = queue.Queue()
         self.exif_data = {}
+        self.recursive_scan = tk.BooleanVar()
 
         self.setup_ui()
 
@@ -38,6 +39,10 @@ class ImageViewerApp:
         # Toggle filter button
         self.filter_btn = tk.Button(filter_frame, text="Toggle Filter (ON)", command=self.toggle_filter)
         self.filter_btn.pack(side=tk.LEFT, padx=5)
+
+        # Checkbox for recursive scanning
+        self.recursive_checkbox = tk.Checkbutton(filter_frame, text="Scan Recursively", variable=self.recursive_scan)
+        self.recursive_checkbox.pack(side=tk.LEFT, padx=5)
 
         # Frame for progress bar and label
         self.progress_frame = tk.Frame(self.root)
@@ -60,17 +65,28 @@ class ImageViewerApp:
     def select_folder(self):
         self.folder_path = filedialog.askdirectory(initialdir=self.last_folder)
         if self.folder_path:
-            self.last_folder = self.folder_path  # Remember this folder for next time
+            self.last_folder = self.folder_path
             self.load_images()
 
     def load_images(self):
         self.images = []
         self.exif_data = {}
-        for filename in os.listdir(self.folder_path):
-            if filename.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.bmp')):
-                image_path = os.path.join(self.folder_path, filename)
-                self.images.append(image_path)
-        
+        self.tree.delete(*self.tree.get_children())
+        self.progress_label.config(text="")
+
+        if self.recursive_scan.get():
+            for root, dirs, files in os.walk(self.folder_path):
+                # Exclude Synology thumbnail folders
+                if "@eaDir" in dirs:
+                    dirs.remove("@eaDir")
+                for file in files:
+                    if file.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.bmp')):
+                        self.images.append(os.path.join(root, file))
+        else:
+            for filename in os.listdir(self.folder_path):
+                if filename.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.bmp')):
+                    self.images.append(os.path.join(self.folder_path, filename))
+
         self.progress_bar["maximum"] = len(self.images)
         self.progress_bar["value"] = 0
         
@@ -96,7 +112,6 @@ class ImageViewerApp:
                 image_path, has_tag = item
                 filename = os.path.basename(image_path)
                 self.tree.insert("", "end", values=(filename, "No" if self.is_filtered else ("Yes" if has_tag else "No")))
-                self.progress_bar["value"] += 1
         except queue.Empty:
             self.root.after(100, self.check_image_queue)
 
