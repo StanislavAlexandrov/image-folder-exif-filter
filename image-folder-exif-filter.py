@@ -12,6 +12,7 @@ class ImageViewerApp:
         self.root.geometry("800x600")
 
         self.folder_path = ""
+        self.last_folder = os.path.expanduser("~")  # Start with user's home directory
         self.images = []
         self.is_filtered = True
         self.filter_tag = "DateTimeOriginal"
@@ -57,8 +58,9 @@ class ImageViewerApp:
         self.tree.pack(expand=True, fill="both")
 
     def select_folder(self):
-        self.folder_path = filedialog.askdirectory()
+        self.folder_path = filedialog.askdirectory(initialdir=self.last_folder)
         if self.folder_path:
+            self.last_folder = self.folder_path  # Remember this folder for next time
             self.load_images()
 
     def load_images(self):
