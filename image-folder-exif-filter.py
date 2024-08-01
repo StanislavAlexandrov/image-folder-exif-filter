@@ -118,6 +118,7 @@ class ImageViewerApp:
         else:
             threading.Thread(target=self.process_images, daemon=True).start()
         self.root.after(100, self.check_image_queue)
+        self.update_table()
 
     def process_images(self):
         for i, image_path in enumerate(self.images):
@@ -168,7 +169,7 @@ class ImageViewerApp:
     def update_table(self):
         self.tree.delete(*self.tree.get_children())
         for image_path, has_tag in self.exif_data.items():
-            if not self.is_filtered or has_tag:
+            if not self.is_filtered or not has_tag:  # Changed condition here
                 filename = os.path.basename(image_path)
                 discrepancy = self.date_discrepancies.get(image_path, "")
                 self.tree.insert("", "end", values=(filename, "Yes" if has_tag else "No", discrepancy))
