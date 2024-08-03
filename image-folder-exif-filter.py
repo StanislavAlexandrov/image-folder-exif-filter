@@ -6,10 +6,12 @@ import threading
 import queue
 from datetime import datetime, timedelta
 
+
 class ImageViewerApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("Image Viewer with EXIF Filter and Date Discrepancy Check")
+        self.root.title(
+            "Image Viewer with EXIF Filter and Date Discrepancy Check")
         self.root.geometry("1000x700")
 
         self.folder_path = ""
@@ -21,7 +23,8 @@ class ImageViewerApp:
         self.exif_data = {}
         self.recursive_scan = tk.BooleanVar()
         self.date_discrepancies = {}
-        self.discrepancy_threshold = tk.StringVar(value="30")  # Default to 30 days
+        self.discrepancy_threshold = tk.StringVar(
+            value="30")  # Default to 30 days
 
         self.setup_ui()
 
@@ -31,11 +34,13 @@ class ImageViewerApp:
         button_frame.pack(pady=10)
 
         # Button to select folder
-        self.select_folder_btn = tk.Button(button_frame, text="Select Folder", command=self.select_folder)
+        self.select_folder_btn = tk.Button(
+            button_frame, text="Select Folder", command=self.select_folder)
         self.select_folder_btn.pack(side=tk.LEFT, padx=5)
 
         # New button to open folder and check discrepancies
-        self.discrepancy_check_btn = tk.Button(button_frame, text="Open Folder and Check Discrepancies", command=self.open_and_check_discrepancies)
+        self.discrepancy_check_btn = tk.Button(
+            button_frame, text="Open Folder and Check Discrepancies", command=self.open_and_check_discrepancies)
         self.discrepancy_check_btn.pack(side=tk.LEFT, padx=5)
 
         # Frame for filter controls
@@ -48,16 +53,20 @@ class ImageViewerApp:
         self.tag_entry.pack(side=tk.LEFT, padx=5)
 
         # Toggle filter button
-        self.filter_btn = tk.Button(filter_frame, text="Toggle Filter (ON)", command=self.toggle_filter)
+        self.filter_btn = tk.Button(
+            filter_frame, text="Toggle Filter (ON)", command=self.toggle_filter)
         self.filter_btn.pack(side=tk.LEFT, padx=5)
 
         # Checkbox for recursive scanning
-        self.recursive_checkbox = tk.Checkbutton(filter_frame, text="Scan Recursively", variable=self.recursive_scan)
+        self.recursive_checkbox = tk.Checkbutton(
+            filter_frame, text="Scan Recursively", variable=self.recursive_scan)
         self.recursive_checkbox.pack(side=tk.LEFT, padx=5)
 
         # Label and Entry for discrepancy threshold
-        tk.Label(filter_frame, text="Discrepancy Threshold (days):").pack(side=tk.LEFT, padx=5)
-        self.threshold_entry = tk.Entry(filter_frame, textvariable=self.discrepancy_threshold, width=5)
+        tk.Label(filter_frame, text="Discrepancy Threshold (days):").pack(
+            side=tk.LEFT, padx=5)
+        self.threshold_entry = tk.Entry(
+            filter_frame, textvariable=self.discrepancy_threshold, width=5)
         self.threshold_entry.pack(side=tk.LEFT, padx=5)
 
         # Frame for progress bar and label
@@ -65,7 +74,8 @@ class ImageViewerApp:
         self.progress_frame.pack(pady=10)
 
         # Progress bar
-        self.progress_bar = ttk.Progressbar(self.progress_frame, orient="horizontal", length=300, mode="determinate")
+        self.progress_bar = ttk.Progressbar(
+            self.progress_frame, orient="horizontal", length=300, mode="determinate")
         self.progress_bar.pack(side=tk.LEFT, padx=(0, 10))
 
         # Progress label
@@ -73,7 +83,8 @@ class ImageViewerApp:
         self.progress_label.pack(side=tk.LEFT)
 
         # Table to display images
-        self.tree = ttk.Treeview(self.root, columns=("Filename", "Has EXIF Tag", "Date Discrepancy"), show="headings")
+        self.tree = ttk.Treeview(self.root, columns=(
+            "Filename", "Has EXIF Tag", "Date Discrepancy"), show="headings")
         self.tree.heading("Filename", text="Filename")
         self.tree.heading("Has EXIF Tag", text="Has EXIF Tag")
         self.tree.heading("Date Discrepancy", text="Date Discrepancy")
@@ -108,13 +119,15 @@ class ImageViewerApp:
         else:
             for filename in os.listdir(self.folder_path):
                 if filename.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.bmp')):
-                    self.images.append(os.path.join(self.folder_path, filename))
+                    self.images.append(os.path.join(
+                        self.folder_path, filename))
 
         self.progress_bar["maximum"] = len(self.images)
         self.progress_bar["value"] = 0
-        
+
         if check_discrepancies:
-            threading.Thread(target=self.process_images_with_discrepancies, daemon=True).start()
+            threading.Thread(
+                target=self.process_images_with_discrepancies, daemon=True).start()
         else:
             threading.Thread(target=self.process_images, daemon=True).start()
         self.root.after(100, self.check_image_queue)
@@ -148,14 +161,16 @@ class ImageViewerApp:
                     return
                 image_path, has_tag, discrepancy = item
                 filename = os.path.basename(image_path)
-                self.tree.insert("", "end", values=(filename, "Yes" if has_tag else "No", discrepancy))
+                self.tree.insert("", "end", values=(
+                    filename, "Yes" if has_tag else "No", discrepancy))
         except queue.Empty:
             self.root.after(100, self.check_image_queue)
 
     def has_exif_tag(self, image_path):
         try:
             with Image.open(image_path) as img:
-                exif = {ExifTags.TAGS[k]: v for k, v in img._getexif().items() if k in ExifTags.TAGS}
+                exif = {ExifTags.TAGS[k]: v for k, v in img._getexif(
+                ).items() if k in ExifTags.TAGS}
                 return self.filter_tag in exif
         except:
             return False
@@ -163,7 +178,8 @@ class ImageViewerApp:
     def toggle_filter(self):
         self.is_filtered = not self.is_filtered
         self.filter_tag = self.tag_entry.get()
-        self.filter_btn.config(text=f"Toggle Filter ({'ON' if self.is_filtered else 'OFF'})")
+        self.filter_btn.config(
+            text=f"Toggle Filter ({'ON' if self.is_filtered else 'OFF'})")
         self.update_table()
 
     def update_table(self):
@@ -172,7 +188,8 @@ class ImageViewerApp:
             if not self.is_filtered or not has_tag:  # Changed condition here
                 filename = os.path.basename(image_path)
                 discrepancy = self.date_discrepancies.get(image_path, "")
-                self.tree.insert("", "end", values=(filename, "Yes" if has_tag else "No", discrepancy))
+                self.tree.insert("", "end", values=(
+                    filename, "Yes" if has_tag else "No", discrepancy))
 
     def check_image_date_discrepancy(self, image_path):
         try:
@@ -182,15 +199,18 @@ class ImageViewerApp:
 
         try:
             with Image.open(image_path) as img:
-                exif = {ExifTags.TAGS[k]: v for k, v in img._getexif().items() if k in ExifTags.TAGS}
-                
-                date_tags = ['DateTimeOriginal', 'DateTimeDigitized', 'DateTime']
+                exif = {ExifTags.TAGS[k]: v for k, v in img._getexif(
+                ).items() if k in ExifTags.TAGS}
+
+                date_tags = ['DateTimeOriginal',
+                             'DateTimeDigitized', 'DateTime']
                 dates = []
 
                 for tag in date_tags:
                     if tag in exif:
                         try:
-                            date = datetime.strptime(exif[tag], '%Y:%m:%d %H:%M:%S')
+                            date = datetime.strptime(
+                                exif[tag], '%Y:%m:%d %H:%M:%S')
                             dates.append((tag, date))
                         except ValueError:
                             pass
@@ -214,6 +234,7 @@ class ImageViewerApp:
                     return ""
         except:
             return ""
+
 
 if __name__ == "__main__":
     root = tk.Tk()
