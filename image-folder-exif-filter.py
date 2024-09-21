@@ -23,11 +23,11 @@ class EnhancedImageExifEditorApp:
         self.recursive_scan = tk.BooleanVar(value=True)
         self.is_filtered = tk.BooleanVar(value=True)
         self.filter_tag = "DateTimeOriginal"
-        self.date_tags = ['DateTimeOriginal', 'DateTimeDigitized',
-                          'DateTime', 'CreateDate', 'ModifyDate']
+        self.date_tags = ['DateTimeOriginal', 'DateTimeDigitized', 'DateTime', 'CreateDate', 'ModifyDate', 'GPSDateTime']
         self.date_discrepancies = {}
         self.discrepancy_threshold = tk.StringVar(value="30")
         self.problematic_files = set()
+        self.show_only_discrepancies = tk.BooleanVar(value=True)  # Add this line
 
         self.setup_ui()
 
@@ -45,6 +45,10 @@ class EnhancedImageExifEditorApp:
         self.discrepancy_check_btn = tk.Button(
             button_frame, text="Open Folder and Check Discrepancies", command=self.open_and_check_discrepancies)
         self.discrepancy_check_btn.pack(side=tk.LEFT, padx=5)
+        
+        # New button to open folder and check GPS discrepancies
+        self.gps_discrepancy_check_btn = tk.Button(button_frame, text="Open Folder and Check GPS Discrepancies", command=self.open_and_check_gps_discrepancies)
+        self.gps_discrepancy_check_btn.pack(side=tk.LEFT, padx=5)
 
         # Checkbox for recursive scanning
         self.recursive_checkbox = tk.Checkbutton(
@@ -59,6 +63,11 @@ class EnhancedImageExifEditorApp:
         self.filter_checkbox = tk.Checkbutton(filter_frame, text="Filter (show only missing DateTimeOriginal)",
                                               variable=self.is_filtered, command=self.update_table)
         self.filter_checkbox.pack(side=tk.LEFT, padx=5)
+        
+        # Checkbox to show only files with discrepancies
+        self.show_discrepancies_checkbox = tk.Checkbutton(filter_frame, text="Show only files with discrepancies",
+                                                  variable=self.show_only_discrepancies, command=self.update_table)
+        self.show_discrepancies_checkbox.pack(side=tk.LEFT, padx=5)
 
         # Label and Entry for discrepancy threshold
         tk.Label(filter_frame, text="Discrepancy Threshold (days):").pack(
@@ -113,8 +122,14 @@ class EnhancedImageExifEditorApp:
         if self.folder_path:
             self.last_folder = self.folder_path
             self.load_images(check_discrepancies=True)
+    
+    def open_and_check_gps_discrepancies(self):
+        self.folder_path = filedialog.askdirectory(initialdir=self.last_folder)
+        if self.folder_path:
+            self.last_folder = self.folder_path
+            self.load_images(check_discrepancies=True, check_gps=True)
 
-    def load_images(self, check_discrepancies=False):
+    def load_images(self, check_discrepancies=False, check_gps=False):
         self.images = []
         self.exif_data = {}
         self.date_discrepancies = {}
@@ -139,8 +154,7 @@ class EnhancedImageExifEditorApp:
         self.progress_bar["value"] = 0
 
         if check_discrepancies:
-            threading.Thread(
-                target=self.process_images_with_discrepancies, daemon=True).start()
+            threading.Thread(target=self.process_images_with_discrepancies, args=(check_gps,), daemon=True).start()
         else:
             threading.Thread(target=self.process_images, daemon=True).start()
         self.root.after(100, self.check_image_queue)
@@ -153,11 +167,13 @@ class EnhancedImageExifEditorApp:
             self.progress_bar["value"] = i + 1
         self.image_queue.put(None)  # Signal that processing is complete
 
-    def process_images_with_discrepancies(self):
+    def process_images_with_discrepancies(self, check_gps=False):
         for i, image_path in enumerate(self.images):
             exif_data = self.get_exif_data(image_path)
-            discrepancy = self.check_image_date_discrepancy(
-                image_path, exif_data)
+            if check_gps:
+                discrepancy = self.check_gps_date_discrepancy(image_path, exif_data)
+            else:
+                discrepancy = self.check_image_date_discrepancy(image_path, exif_data)
             self.exif_data[image_path] = exif_data
             self.date_discrepancies[image_path] = discrepancy
             self.image_queue.put((image_path, exif_data, discrepancy))
@@ -185,6 +201,27 @@ class EnhancedImageExifEditorApp:
             self.problematic_files.add(image_path)
         return exif_data
 
+    def check_gps_date_discrepancy(self, image_path, exif_data):
+        try:
+            threshold = int(self.discrepancy_threshold.get())
+        except ValueError:
+            threshold = 30  # Default to 30 days if invalid input
+
+        date_original = exif_data.get('DateTimeOriginal', '')
+        gps_date = exif_data.get('GPSDateTime', '')
+
+        if date_original and gps_date:
+            try:
+                date_original = datetime.strptime(date_original, '%Y:%m:%d %H:%M:%S')
+                gps_date = datetime.strptime(gps_date, '%Y:%m:%d %H:%M:%S')
+                diff = abs(date_original - gps_date)
+                if diff > timedelta(days=threshold):
+                    return f"DateTimeOriginal and GPSDateTime differ by {diff.days} days"
+            except ValueError:
+                pass
+
+        return ""
+    
     def check_image_queue(self):
         try:
             while True:
@@ -206,11 +243,16 @@ class EnhancedImageExifEditorApp:
     def update_table(self):
         self.tree.delete(*self.tree.get_children())
         for image_path, exif_data in self.exif_data.items():
-            if not self.is_filtered.get() or not exif_data['DateTimeOriginal']:
+            show_item = True
+            if self.is_filtered.get() and exif_data['DateTimeOriginal']:
+                show_item = False
+            if self.show_only_discrepancies.get() and not self.date_discrepancies.get(image_path):
+                show_item = False
+            
+            if show_item:
                 filename = os.path.basename(image_path)
                 discrepancy = self.date_discrepancies.get(image_path, "")
-                values = [filename] + [exif_data[tag]
-                                       for tag in self.date_tags] + [discrepancy]
+                values = [filename] + [exif_data[tag] for tag in self.date_tags] + [discrepancy]
                 item_id = self.tree.insert("", "end", values=values)
                 if image_path in self.problematic_files:
                     self.tree.item(item_id, tags=('problematic',))
