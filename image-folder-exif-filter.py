@@ -184,19 +184,26 @@ class EnhancedImageExifEditorApp:
         exif_data = {tag: "" for tag in self.date_tags}
         try:
             with Image.open(image_path) as img:
-                exif = {ExifTags.TAGS[k]: v for k, v in img._getexif(
-                ).items() if k in ExifTags.TAGS} if img._getexif() else {}
-                for tag in self.date_tags:
-                    if tag in exif:
-                        exif_data[tag] = exif[tag]
+                exif = img._getexif()
+                if exif:
+                    for tag_id, value in exif.items():
+                        tag = ExifTags.TAGS.get(tag_id, tag_id)
+                        if tag in self.date_tags:
+                            exif_data[tag] = value
+                    
+                    # Extract GPSDateTime
+                    if piexif.GPSIFD.GPSDateStamp in exif and piexif.GPSIFD.GPSTimeStamp in exif:
+                        date = exif[piexif.GPSIFD.GPSDateStamp]
+                        time = exif[piexif.GPSIFD.GPSTimeStamp]
+                        if isinstance(time, tuple) and len(time) == 3:
+                            hour, minute, second = [float(x) / float(y) for x, y in time]
+                            exif_data['GPSDateTime'] = f"{date} {int(hour):02d}:{int(minute):02d}:{int(second):02d}Z"
 
             # Add file system dates
             file_stats = os.stat(image_path)
-            exif_data['CreateDate'] = datetime.fromtimestamp(
-                file_stats.st_ctime).strftime('%Y:%m:%d %H:%M:%S')
-            exif_data['ModifyDate'] = datetime.fromtimestamp(
-                file_stats.st_mtime).strftime('%Y:%m:%d %H:%M:%S')
-        except (AttributeError, UnidentifiedImageError, OSError, ValueError) as e:
+            exif_data['CreateDate'] = datetime.fromtimestamp(file_stats.st_ctime).strftime('%Y:%m:%d %H:%M:%S')
+            exif_data['ModifyDate'] = datetime.fromtimestamp(file_stats.st_mtime).strftime('%Y:%m:%d %H:%M:%S')
+        except (AttributeError, KeyError, IndexError, TypeError, ValueError, UnidentifiedImageError, OSError) as e:
             print(f"Error processing {image_path}: {str(e)}")
             self.problematic_files.add(image_path)
         return exif_data
@@ -213,12 +220,21 @@ class EnhancedImageExifEditorApp:
         if date_original and gps_date:
             try:
                 date_original = datetime.strptime(date_original, '%Y:%m:%d %H:%M:%S')
-                gps_date = datetime.strptime(gps_date, '%Y:%m:%d %H:%M:%S')
+                
+                # Handle the GPS date format with 'Z' for UTC
+                if gps_date.endswith('Z'):
+                    gps_date = gps_date[:-1]  # Remove the 'Z'
+                    gps_date = datetime.strptime(gps_date, '%Y:%m:%d %H:%M:%S')
+                    gps_date = gps_date.replace(tzinfo=timezone.utc)
+                    date_original = date_original.replace(tzinfo=timezone.utc)  # Assume DateTimeOriginal is also in UTC
+                else:
+                    gps_date = datetime.strptime(gps_date, '%Y:%m:%d %H:%M:%S')
+                
                 diff = abs(date_original - gps_date)
                 if diff > timedelta(days=threshold):
                     return f"DateTimeOriginal and GPSDateTime differ by {diff.days} days"
-            except ValueError:
-                pass
+            except ValueError as e:
+                return f"Invalid date format: {str(e)}"
 
         return ""
     
